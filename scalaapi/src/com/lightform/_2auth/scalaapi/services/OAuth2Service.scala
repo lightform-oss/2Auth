@@ -4,18 +4,19 @@ import com.lightform._2auth.javaapi.interfaces.{
   AccessTokenCodeRequest,
   AccessTokenPasswordRequest,
   AccessTokenRefreshRequest,
-  AccessTokenRequest
+  AccessTokenRequest,
+  AuthorizationRequest,
+  LimitedAccessTokenResponse,
+  AccessTokenResponse => AccessTokenResponseI,
+  AuthorizationResponse => AuthorizationResponseI,
+  ErrorResponse => ErrorResponseI
 }
 import com.lightform._2auth.scalaapi.interfaces.{
+  AuthorizationCodeRepository,
   ClientRepository,
   TokenRepository,
   UserRepository,
   OAuth2Service => AbstractOAuth2Service
-}
-import com.lightform._2auth.scalaapi.payloads.responses.AccessTokenResponse
-import com.lightform._2auth.javaapi.interfaces.{
-  ErrorResponse => ErrorResponseI,
-  AccessTokenResponse => AccessTokenResponseI
 }
 import cats.MonadError
 import cats.data.EitherT
@@ -29,9 +30,70 @@ import com.lightform._2auth.scalaapi.payloads.responses.ErrorResponse
 class OAuth2Service[F[+_]](
     userService: UserRepository[F],
     tokenRepository: TokenRepository[F],
-    clientRepository: ClientRepository[F]
+    clientRepository: ClientRepository[F],
+    codeRepository: AuthorizationCodeRepository[F]
 )(implicit F: MonadError[F, Throwable])
     extends AbstractOAuth2Service[F] {
+
+  def handleAuthorizationRequest(
+      userId: String,
+      request: AuthorizationRequest
+  ): F[
+    Either[ErrorResponseI, Either[
+      LimitedAccessTokenResponse,
+      AuthorizationResponseI
+    ]]
+  ] =
+    request.getResponseType match {
+      case "token" => handleImplicitRequest(userId, request).map(_.map(Left(_)))
+      case "code" =>
+        handleCodeAuthzRequest(userId, request).map(_.map(Right(_)))
+    }
+
+  def handleImplicitRequest(
+      userId: String,
+      request: AuthorizationRequest
+  ): F[Either[ErrorResponse, LimitedAccessTokenResponse]] =
+    Left(ErrorResponse(UNSUPPORTED_RESPONSE_TYPE, None)).pure[F]
+
+  def handleCodeAuthzRequest(
+      userId: String,
+      request: AuthorizationRequest
+  ): F[Either[ErrorResponseI, AuthorizationResponseI]] =
+    (for {
+      maybeRequiredRedirectUri <- EitherT.right[ErrorResponse](
+        clientRepository.retrieveClientRedirectUri(request.getClientId)
+      )
+      _ <- EitherT.fromEither[F](
+        (maybeRequiredRedirectUri, request.getRedirectUri.toScala) match {
+          case (Some(registeredUri), Some(providedUri))
+              if registeredUri == providedUri =>
+            Right(())
+          case (Some(_), Some(_)) =>
+            Left(
+              ErrorResponse(
+                INVALID_REQUEST,
+                Some(
+                  "Provided redirect_uri does not match registered redirect_uri."
+                )
+              )
+            )
+          case (Some(_), None) => Right(())
+          case (None, Some(_)) => Right(())
+          case (None, None) =>
+            Left(ErrorResponse(INVALID_REQUEST, Some("Missing redirect_uri.")))
+        }
+      )
+      code <- EitherT.right[ErrorResponse](
+        codeRepository.generateCode(
+          userId,
+          request.getClientId,
+          request.getRedirectUri.toScala,
+          request.getScope.asScala.toSet,
+          request.getState.toScala
+        )
+      )
+    } yield code).value
 
   def handleTokenRequest(
       request: AccessTokenRequest,
@@ -43,8 +105,21 @@ class OAuth2Service[F[+_]](
         handlePasswordRequest(password)
       case refresh: AccessTokenRefreshRequest =>
         handleRefreshRequest(refresh, clientId, clientSecret)
-      //case code: AccessTokenCodeRequest => handleCodeRequest(code)
-    }).recover{case e: ErrorResponse => Left(e)}
+      case code: AccessTokenCodeRequest =>
+        (clientId, clientSecret) match {
+          case (Some(id), Some(sec)) => handleCodeTokenRequest(code, id, sec)
+          case _ =>
+            Left(
+              ErrorResponse(
+                INVALID_CLIENT,
+                Some(
+                  "Client authentication failed (no client authentication included, or unsupported authentication method)."
+                )
+              )
+            ).pure[F]
+        }
+      case _ => Left(ErrorResponse(UNSUPPORTED_GRANT_TYPE, None)).pure[F]
+    }).recover { case e: ErrorResponse => Left(e) }
 
   def handlePasswordRequest(
       request: AccessTokenPasswordRequest
@@ -137,5 +212,77 @@ class OAuth2Service[F[+_]](
       )
     } yield newToken).value
 
-  //def authorizationEndpoint(responseType: String, )
+  def handleCodeTokenRequest(
+      request: AccessTokenCodeRequest,
+      clientId: String,
+      clientSecret: String
+  ): F[Either[ErrorResponse, AccessTokenResponseI]] =
+    (for {
+      // get information about the authorization code
+      meta <- EitherT.fromOptionF(
+        codeRepository.validateCode(request.getCode),
+        ErrorResponse(
+          INVALID_GRANT,
+          Some(
+            "The provided authorization grant (authorization code) is invalid, expired, or revoked."
+          )
+        )
+      )
+      // ensure the client is valid
+      _ <- EitherT(
+        if (meta.getClientId == clientId)
+          clientRepository
+            .validateClient(meta.getClientId, clientSecret)
+            .map(validClient =>
+              if (!validClient)
+                Left(
+                  ErrorResponse(
+                    INVALID_CLIENT,
+                    Some("Client authentication failed.")
+                  )
+                )
+              else Right(())
+            )
+        else
+          Left(
+            ErrorResponse(
+              INVALID_GRANT,
+              Some(
+                "The provided authorization grant (authorization code) was issued to another client."
+              )
+            )
+          ).pure[F]
+      )
+      // ensure redirect URIs match
+      _ <- EitherT.fromEither[F](
+        (meta.getRedirectUri.toScala, request.getRedirectUri.toScala) match {
+          // correct redirect uri was provided
+          case (Some(requiredUri), Some(providedUri))
+              if requiredUri == providedUri =>
+            Right(())
+          // redirect uri was expected, but was not provided or did not match required value
+          case (Some(_), _) =>
+            Left(
+              ErrorResponse(
+                INVALID_GRANT,
+                Some(
+                  "The provided authorization grant (authorization code) does not match the redirection URI used in the authorization request"
+                )
+              )
+            )
+          // redirect uri was not required
+          case (None, _) => Right(())
+        }
+      )
+      // issue a token
+      token <- EitherT.right[ErrorResponse](
+        tokenRepository.createToken(
+          Some(meta.getUserId),
+          Some(meta.getClientId),
+          true,
+          None,
+          meta.getScope.asScala.toSet
+        )
+      )
+    } yield token).value
 }

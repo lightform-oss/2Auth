@@ -2,9 +2,7 @@ package com.lightform._2auth.scalaapi.payloads.responses
 
 import java.time.Duration
 
-import com.lightform._2auth.javaapi.interfaces.{
-  AccessTokenResponse => JResponse
-}
+import com.lightform._2auth.javaapi.interfaces
 
 import scala.jdk.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -15,7 +13,7 @@ case class AccessTokenResponse(
     expires_in: Option[Duration],
     refresh_token: Option[String],
     scope: Set[String] = Set.empty
-) extends JResponse {
+) extends interfaces.AccessTokenResponse {
   def getAccessToken  = access_token
   def getTokenType    = token_type
   def getExpiresIn    = expires_in.toJava

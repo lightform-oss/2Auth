@@ -1,6 +1,6 @@
 package com.lightform._2auth.scalaapi.payloads.requests
 
-import com.lightform._2auth.javaapi.{interfaces => j}
+import com.lightform._2auth.javaapi.interfaces
 import scala.jdk.CollectionConverters._
 
 case class AccessTokenPasswordRequest(
@@ -8,7 +8,7 @@ case class AccessTokenPasswordRequest(
     username: String,
     password: String,
     scope: Set[String] = Set.empty
-) extends j.AccessTokenPasswordRequest {
+) extends interfaces.AccessTokenPasswordRequest {
   def getUsername = username
   def getPassword = password
   def getScope    = scope.asJava
