@@ -14,6 +14,8 @@ import java.{util => ju}
 import com.lightform._2auth.scalaapi.interfaces.AuthorizationCodeService
 import com.lightform._2auth.scalaapi.payloads.responses.AuthorizationResponse
 import com.lightform._2auth.scalaapi.models.AuthorizationCodeMeta
+import com.lightform._2auth.scalaapi.payloads.responses.ErrorResponse
+import scala.util.Failure
 
 class InMemoryBackend(
     clientId: String,
@@ -33,11 +35,21 @@ class InMemoryBackend(
   var requestedScope: Set[String]          = null
 
   def retrieveClientRedirectUri(clientId: String) =
-    Success(
-      Some(redirectUri).filter(_ =>
-        clientId == this.clientId && redirectIsRegistered
+    if (clientId == "boom")
+      Failure(
+        ErrorResponse(
+          new com.lightform._2auth.javaapi.interfaces.Error {
+            val getValue = "boom"
+          },
+          None
+        )
       )
-    )
+    else
+      Success(
+        Some(redirectUri).filter(_ =>
+          clientId == this.clientId && redirectIsRegistered
+        )
+      )
 
   def generateCode(
       userId: String,
@@ -121,9 +133,19 @@ class InMemoryBackend(
       username: String,
       password: String
   ) =
-    Success(
-      Option(userId).filter(_ =>
-        username == this.username && password == this.password
+    if (username == "boom")
+      Failure(
+        ErrorResponse(
+          new com.lightform._2auth.javaapi.interfaces.Error {
+            val getValue = "boom"
+          },
+          None
+        )
       )
-    )
+    else
+      Success(
+        Option(userId).filter(_ =>
+          username == this.username && password == this.password
+        )
+      )
 }

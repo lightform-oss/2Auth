@@ -21,6 +21,7 @@ class OAuth2EndpointsSpec
     with Matchers
     with EitherValues
     with TryValues {
+
   "the handleTokenRequest method" should "respond to strange grants" in new fixtures {
     val strageRequest = new AccessTokenRequest {
       def getGrantType = "strange"
@@ -30,6 +31,18 @@ class OAuth2EndpointsSpec
       service.handleTokenRequest(strageRequest, None, None)
 
     response.left.value.getError.getValue shouldEqual "unsupported_grant_type"
+  }
+
+  it should "recover oauth errors" in new fixtures {
+    val response = service
+      .handleTokenRequest(
+        AccessTokenPasswordRequest("password", "boom", testPassword),
+        None,
+        None
+      )
+      .success
+      .value
+    response.left.value.getError.getValue shouldEqual "boom"
   }
 
   "Password grants" should "reject non-existent users" in new fixtures {
@@ -528,5 +541,16 @@ class OAuth2EndpointsSpec
 
     val service: com.lightform._2auth.scalaapi.interfaces.OAuth2Endpoints[Try] =
       new OAuth2Endpoints[Try](backend, backend, backend, codeService)
+  }
+
+  "the handleAuthorizationRequest method" should "recover oauth errors" in new fixtures {
+    val response = service
+      .handleAuthorizationRequest(
+        testUserId,
+        AuthorizationRequest("code", "boom", None, Set.empty, None)
+      )
+      .success
+      .value
+    response.left.value.getError.getValue shouldEqual "boom"
   }
 }

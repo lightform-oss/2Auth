@@ -44,11 +44,11 @@ class OAuth2Endpoints[F[+_]](
       AuthorizationResponseI
     ]]
   ] =
-    request.getResponseType match {
+    (request.getResponseType match {
       case "token" => handleImplicitRequest(userId, request).map(_.map(Left(_)))
       case "code" =>
         handleCodeAuthzRequest(userId, request).map(_.map(Right(_)))
-    }
+    }).recover { case e: ErrorResponse => Left(e) }
 
   def handleImplicitRequest(
       userId: String,
