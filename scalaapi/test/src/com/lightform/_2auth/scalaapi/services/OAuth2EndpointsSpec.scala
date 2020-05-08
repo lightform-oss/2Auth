@@ -1,17 +1,22 @@
 package com.lightform._2auth.scalaapi.services
 
+import java.time.{Clock, Duration}
 import java.{util => ju}
 
+import black.door.jose.jwk.P256KeyPair
 import cats.implicits._
 import com.lightform._2auth.javaapi.interfaces.AccessTokenRequest
+import com.lightform._2auth.scalaapi.OAuth2Endpoints
 import com.lightform._2auth.scalaapi.payloads.requests._
-import org.scalatest.{EitherValues, TryValues}
+import com.lightform._2auth.services.JwtAuthorizationCodeService
+import com.lightform._2auth.services.JwtAuthorizationCodeService.AuthorizationCodeRepository
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{EitherValues, TryValues}
 
 import scala.util.{Success, Try}
 
-class OAuth2ServiceSpec
+class OAuth2EndpointsSpec
     extends AnyFlatSpec
     with Matchers
     with EitherValues
@@ -494,6 +499,7 @@ class OAuth2ServiceSpec
   }
 
   trait fixtures {
+    implicit val clock = Clock.systemDefaultZone()
 
     val testClientId     = ju.UUID.randomUUID().toString()
     val testClientSecret = ju.UUID.randomUUID().toString()
@@ -511,7 +517,16 @@ class OAuth2ServiceSpec
       testRedirectUri
     )
 
-    val service: com.lightform._2auth.scalaapi.interfaces.OAuth2Service[Try] =
-      new OAuth2Service[Try](backend, backend, backend, backend)
+    val codeService = new JwtAuthorizationCodeService(
+      P256KeyPair.generate.withAlg(Some("ES256")),
+      Duration.ofDays(1),
+      new AuthorizationCodeRepository[Try] {
+        def isCodeUsed(id: String)  = Success(false)
+        def setCodeUsed(id: String) = Success(())
+      }
+    )
+
+    val service: com.lightform._2auth.scalaapi.interfaces.OAuth2Endpoints[Try] =
+      new OAuth2Endpoints[Try](backend, backend, backend, codeService)
   }
 }

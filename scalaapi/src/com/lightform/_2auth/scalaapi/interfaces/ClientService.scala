@@ -1,6 +1,6 @@
 package com.lightform._2auth.scalaapi.interfaces
 
-trait ClientRepository[F[_]] {
+trait ClientService[F[_]] {
 
   /**
     * @param clientId

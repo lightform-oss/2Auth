@@ -9,7 +9,7 @@ import com.lightform._2auth.javaapi.interfaces.AuthorizationRequest
 import com.lightform._2auth.javaapi.interfaces.LimitedAccessTokenResponse
 import com.lightform._2auth.javaapi.interfaces.AuthorizationResponse
 
-trait OAuth2Service[F[_]] {
+trait OAuth2Endpoints[F[_]] {
 
   /**
     * This method assumes the user has already been authenticated and

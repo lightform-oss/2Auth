@@ -1,5 +1,8 @@
-package com.lightform._2auth.scalaapi.services
+package com.lightform._2auth.scalaapi
 
+import cats.MonadError
+import cats.data.EitherT
+import cats.implicits._
 import com.lightform._2auth.javaapi.interfaces.{
   AccessTokenCodeRequest,
   AccessTokenPasswordRequest,
@@ -11,27 +14,24 @@ import com.lightform._2auth.javaapi.interfaces.{
   AuthorizationResponse => AuthorizationResponseI,
   ErrorResponse => ErrorResponseI
 }
-import com.lightform._2auth.scalaapi.interfaces.{
-  AuthorizationCodeRepository,
-  ClientRepository,
-  TokenRepository,
-  UserRepository,
-  OAuth2Service => AbstractOAuth2Service
-}
-import cats.MonadError
-import cats.data.EitherT
 import com.lightform._2auth.javaapi.models.Error._
-import cats.implicits._
+import com.lightform._2auth.scalaapi.interfaces.{
+  AuthorizationCodeService,
+  ClientService,
+  TokenService,
+  UserService,
+  OAuth2Endpoints => AbstractOAuth2Service
+}
+import com.lightform._2auth.scalaapi.payloads.responses.ErrorResponse
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
-import com.lightform._2auth.scalaapi.payloads.responses.ErrorResponse
 
-class OAuth2Service[F[+_]](
-    userService: UserRepository[F],
-    tokenRepository: TokenRepository[F],
-    clientRepository: ClientRepository[F],
-    codeRepository: AuthorizationCodeRepository[F]
+class OAuth2Endpoints[F[+_]](
+    userService: UserService[F],
+    tokenService: TokenService[F],
+    clientService: ClientService[F],
+    codeService: AuthorizationCodeService[F]
 )(implicit F: MonadError[F, Throwable])
     extends AbstractOAuth2Service[F] {
 
@@ -62,7 +62,7 @@ class OAuth2Service[F[+_]](
   ): F[Either[ErrorResponseI, AuthorizationResponseI]] =
     (for {
       maybeRequiredRedirectUri <- EitherT.right[ErrorResponse](
-        clientRepository.retrieveClientRedirectUri(request.getClientId)
+        clientService.retrieveClientRedirectUri(request.getClientId)
       )
       _ <- EitherT.fromEither[F](
         (maybeRequiredRedirectUri, request.getRedirectUri.toScala) match {
@@ -85,7 +85,7 @@ class OAuth2Service[F[+_]](
         }
       )
       code <- EitherT.right[ErrorResponse](
-        codeRepository.generateCode(
+        codeService.generateCode(
           userId,
           request.getClientId,
           request.getRedirectUri.toScala,
@@ -135,7 +135,7 @@ class OAuth2Service[F[+_]](
         )
       )
       token <- EitherT.right[ErrorResponse](
-        tokenRepository.createToken(
+        tokenService.createToken(
           Some(userId),
           None,
           false,
@@ -152,7 +152,7 @@ class OAuth2Service[F[+_]](
   ): F[Either[ErrorResponse, AccessTokenResponseI]] =
     (for {
       meta <- EitherT.fromOptionF(
-        tokenRepository.validateRefreshToken(request.getRefreshToken),
+        tokenService.validateRefreshToken(request.getRefreshToken),
         ErrorResponse(
           INVALID_GRANT,
           Some("The provided refresh token is invalid, expired, or revoked")
@@ -181,7 +181,7 @@ class OAuth2Service[F[+_]](
           // log clientId == providedId
           EitherT(
             (if (clientId == providedId)
-               clientRepository
+               clientService
                  .validateClient(clientId, providedSecret)
              else false.pure[F])
               .map(
@@ -202,7 +202,7 @@ class OAuth2Service[F[+_]](
           )
       }
       newToken <- EitherT.right[ErrorResponse](
-        tokenRepository.createToken(
+        tokenService.createToken(
           meta.getUserId.toScala,
           meta.getClientId.toScala,
           meta.isConfidentialClient,
@@ -220,7 +220,7 @@ class OAuth2Service[F[+_]](
     (for {
       // get information about the authorization code
       meta <- EitherT.fromOptionF(
-        codeRepository.validateCode(request.getCode),
+        codeService.validateCode(request.getCode),
         ErrorResponse(
           INVALID_GRANT,
           Some(
@@ -231,7 +231,7 @@ class OAuth2Service[F[+_]](
       // ensure the client is valid
       _ <- EitherT(
         if (meta.getClientId == clientId)
-          clientRepository
+          clientService
             .validateClient(meta.getClientId, clientSecret)
             .map(validClient =>
               if (!validClient)
@@ -276,7 +276,7 @@ class OAuth2Service[F[+_]](
       )
       // issue a token
       token <- EitherT.right[ErrorResponse](
-        tokenRepository.createToken(
+        tokenService.createToken(
           Some(meta.getUserId),
           Some(meta.getClientId),
           true,

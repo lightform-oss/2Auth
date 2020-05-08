@@ -1,6 +1,6 @@
 package com.lightform._2auth.scalaapi.interfaces
 
-trait UserRepository[F[_]] {
+trait UserService[F[_]] {
 
   /**
     * @param username

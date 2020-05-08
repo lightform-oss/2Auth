@@ -5,7 +5,7 @@ import com.lightform._2auth.javaapi.interfaces.{
   RefreshTokenMeta
 }
 
-trait TokenRepository[F[_]] {
+trait TokenService[F[_]] {
 
   /**
     * @param userId only None for client_credentials grant

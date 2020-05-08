@@ -2,16 +2,16 @@ package com.lightform._2auth.scalaapi.services
 
 import com.lightform._2auth.scalaapi.models.{RefreshTokenMeta}
 import com.lightform._2auth.scalaapi.interfaces.{
-  ClientRepository,
-  TokenRepository,
-  UserRepository
+  ClientService,
+  TokenService,
+  UserService
 }
 
 import scala.util.Try
 import scala.util.Success
 import com.lightform._2auth.scalaapi.payloads.responses.AccessTokenResponse
 import java.{util => ju}
-import com.lightform._2auth.scalaapi.interfaces.AuthorizationCodeRepository
+import com.lightform._2auth.scalaapi.interfaces.AuthorizationCodeService
 import com.lightform._2auth.scalaapi.payloads.responses.AuthorizationResponse
 import com.lightform._2auth.scalaapi.models.AuthorizationCodeMeta
 
@@ -22,10 +22,10 @@ class InMemoryBackend(
     username: String,
     password: String,
     redirectUri: String
-) extends ClientRepository[Try]
-    with TokenRepository[Try]
-    with UserRepository[Try]
-    with AuthorizationCodeRepository[Try] {
+) extends ClientService[Try]
+    with TokenService[Try]
+    with UserService[Try]
+    with AuthorizationCodeService[Try] {
   var redirectIsRegistered = true
 
   var code: String                         = null

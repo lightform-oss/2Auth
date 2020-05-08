@@ -3,7 +3,7 @@ package com.lightform._2auth.scalaapi.interfaces
 import com.lightform._2auth.javaapi.interfaces.AuthorizationCodeMeta
 import com.lightform._2auth.javaapi.interfaces.AuthorizationResponse
 
-trait AuthorizationCodeRepository[F[_]] {
+trait AuthorizationCodeService[F[_]] {
 
   /**
     * @param userId
