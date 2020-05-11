@@ -26,7 +26,7 @@ object JwtAuthorizationCodeService {
       aud: String,
       jti: String,
       uri: Option[String],
-      scp: Set[String]
+      scp: Option[Set[String]]
   )
   object AuthzCodeClaims {
     implicit val format = Json.format[AuthzCodeClaims]
@@ -66,8 +66,13 @@ class JwtAuthorizationCodeService[F[+_]: Monad](
     val code = Jwt.sign(
       Claims(
         exp = Some(Instant.now(clock).plus(validityDuration)),
-        unregistered =
-          AuthzCodeClaims(userId, clientId, codeId, redirectUri, scope)
+        unregistered = AuthzCodeClaims(
+          userId,
+          clientId,
+          codeId,
+          redirectUri,
+          if (scope.isEmpty) None else Some(scope)
+        )
       ),
       key
     )
@@ -88,7 +93,12 @@ class JwtAuthorizationCodeService[F[+_]: Monad](
             repo.isCodeUsed(codeId).map(used => if (used) None else Some(()))
           )
           _ <- OptionT.liftF(repo.setCodeUsed(codeId))
-        } yield AuthorizationCodeMeta(userId, clientId, uri, scope)).value
+        } yield AuthorizationCodeMeta(
+          userId,
+          clientId,
+          uri,
+          scope.getOrElse(Set.empty)
+        )).value
     }
 
 }
