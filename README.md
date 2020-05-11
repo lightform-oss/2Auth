@@ -1,6 +1,10 @@
 # 2Auth
 RFC6749 implementation with modular HTTP and persistence layers.
 
+[![](https://www.cloud.lightform.com/img/Wordmark%20Black.svg)](https://lightform.com/)
+
+[![Travis (.com)](https://img.shields.io/travis/com/lightform-oss/2auth?style=for-the-badge)](https://travis-ci.com/lightform-oss/2auth)
+
 ## Overview
 ```
 HTTP Requests  
