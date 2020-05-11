@@ -29,13 +29,16 @@ object services extends ScalaModule {
     val json    = ivy"black.door::jose-json-play:$version"
   }
 
-  def ivyDeps = Agg(Jose.core, Jose.json)
+  def ivyDeps = Agg(
+    Jose.core, Jose.json, 
+    ivy"de.mkammerer:argon2-jvm:2.7"
+  )
 }
 
 object javaapi extends ScalaModule {
   def scalaVersion = scalaV
-  def moduleDeps = Seq(core, scalaapi)
+  def moduleDeps = Seq(services)
 
   // workaround https://github.com/lihaoyi/mill/issues/860
-  def artifactSuffix = ""
+  // def artifactSuffix = ""
 }
