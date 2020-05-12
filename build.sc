@@ -33,6 +33,11 @@ object services extends ScalaModule {
     Jose.core, Jose.json, 
     ivy"de.mkammerer:argon2-jvm:2.7"
   )
+
+  object test extends Tests {
+    def ivyDeps = Agg(ivy"org.scalatest::scalatest:3.1.1")
+    def testFrameworks = Seq("org.scalatest.tools.Framework")
+  }
 }
 
 object javaapi extends ScalaModule {

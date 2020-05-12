@@ -1,5 +1,6 @@
 package com.lightform._2auth.scalaapi.services
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.time.{Clock, Duration}
 import java.{util => ju}
 
@@ -8,8 +9,12 @@ import cats.implicits._
 import com.lightform._2auth.javaapi.interfaces.AccessTokenRequest
 import com.lightform._2auth.scalaapi.OAuth2Endpoints
 import com.lightform._2auth.scalaapi.payloads.requests._
-import com.lightform._2auth.services.JwtAuthorizationCodeService
+import com.lightform._2auth.services.{
+  JwtAuthorizationCodeService,
+  PasswordHashingUserService
+}
 import com.lightform._2auth.services.JwtAuthorizationCodeService.AuthorizationCodeRepository
+import de.mkammerer.argon2.Argon2Factory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.{EitherValues, TryValues}
@@ -511,22 +516,36 @@ class OAuth2EndpointsSpec
     authResponse.getError.getValue shouldEqual "invalid_request"
   }
 
-  trait fixtures {
-    implicit val clock = Clock.systemDefaultZone()
+  "the handleAuthorizationRequest method" should "recover oauth errors" in new fixtures {
+    val response = service
+      .handleAuthorizationRequest(
+        testUserId,
+        AuthorizationRequest("code", "boom", None, Set.empty, None)
+      )
+      .success
+      .value
+    response.left.value.getError.getValue shouldEqual "boom"
+  }
 
-    val testClientId     = ju.UUID.randomUUID().toString()
-    val testClientSecret = ju.UUID.randomUUID().toString()
-    val testUserId       = ju.UUID.randomUUID().toString()
+  trait fixtures {
+    implicit val clock = Clock.systemDefaultZone
+
+    val testClientId     = ju.UUID.randomUUID.toString
+    val testClientSecret = ju.UUID.randomUUID.toString
+    val testUserId       = ju.UUID.randomUUID.toString
     val testUsername     = "john"
     val testPassword     = "bad password"
     val testRedirectUri  = "https://client.example.com/cb"
 
-    val backend = new InMemoryBackend(
+    val argon2 = Argon2Factory.create()
+
+    lazy val backend: InMemoryBackend = new InMemoryBackend(
       testClientId,
       testClientSecret,
       testUserId,
       testUsername,
-      testPassword,
+      new PasswordHashingUserService[Try](null, iterations = 1)
+        .hash(testPassword),
       testRedirectUri
     )
 
@@ -539,18 +558,10 @@ class OAuth2EndpointsSpec
       }
     )
 
-    val service: com.lightform._2auth.scalaapi.interfaces.OAuth2Endpoints[Try] =
-      new OAuth2Endpoints[Try](backend, backend, backend, codeService)
-  }
+    lazy val userService =
+      new PasswordHashingUserService[Try](backend, iterations = 1)
 
-  "the handleAuthorizationRequest method" should "recover oauth errors" in new fixtures {
-    val response = service
-      .handleAuthorizationRequest(
-        testUserId,
-        AuthorizationRequest("code", "boom", None, Set.empty, None)
-      )
-      .success
-      .value
-    response.left.value.getError.getValue shouldEqual "boom"
+    val service: com.lightform._2auth.scalaapi.interfaces.OAuth2Endpoints[Try] =
+      new OAuth2Endpoints[Try](userService, backend, backend, codeService)
   }
 }

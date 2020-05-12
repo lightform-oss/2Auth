@@ -1,6 +1,6 @@
 package com.lightform._2auth.scalaapi.services
 
-import com.lightform._2auth.scalaapi.models.{RefreshTokenMeta}
+import com.lightform._2auth.scalaapi.models.RefreshTokenMeta
 import com.lightform._2auth.scalaapi.interfaces.{
   ClientService,
   TokenService,
@@ -11,10 +11,16 @@ import scala.util.Try
 import scala.util.Success
 import com.lightform._2auth.scalaapi.payloads.responses.AccessTokenResponse
 import java.{util => ju}
-import com.lightform._2auth.scalaapi.interfaces.AuthorizationCodeService
+
 import com.lightform._2auth.scalaapi.payloads.responses.AuthorizationResponse
 import com.lightform._2auth.scalaapi.models.AuthorizationCodeMeta
 import com.lightform._2auth.scalaapi.payloads.responses.ErrorResponse
+import com.lightform._2auth.services.PasswordHashingUserService
+import com.lightform._2auth.services.PasswordHashingUserService.{
+  UserMeta,
+  UserRepository
+}
+
 import scala.util.Failure
 
 class InMemoryBackend(
@@ -26,8 +32,7 @@ class InMemoryBackend(
     redirectUri: String
 ) extends ClientService[Try]
     with TokenService[Try]
-    with UserService[Try]
-    with AuthorizationCodeService[Try] {
+    with UserRepository[Try] {
   var redirectIsRegistered = true
 
   var code: String                         = null
@@ -129,10 +134,7 @@ class InMemoryBackend(
   def validateRefreshToken(token: String) =
     Success(Option(meta).filter(_ => token == refreshToken))
 
-  def authenticateUser(
-      username: String,
-      password: String
-  ) =
+  def retrieveUser(username: String) =
     if (username == "boom")
       Failure(
         ErrorResponse(
@@ -144,8 +146,6 @@ class InMemoryBackend(
       )
     else
       Success(
-        Option(userId).filter(_ =>
-          username == this.username && password == this.password
-        )
+        Some(UserMeta(userId, password)).filter(_ => username == this.username)
       )
 }
