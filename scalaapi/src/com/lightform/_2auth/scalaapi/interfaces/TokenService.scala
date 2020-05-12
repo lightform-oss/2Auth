@@ -26,29 +26,34 @@ trait TokenService[F[_]] {
 trait GrantInference[F[_]] {
   this: TokenService[F] =>
 
+  def mapScope(scope: Set[String]): Set[String] = scope
+
   def createToken(
       maybeUserId: Option[String],
       maybeClientId: Option[String],
       confidentialClient: Boolean,
       maybeRefreshToken: Option[String],
       scope: Set[String]
-    ) = (maybeUserId, maybeClientId, maybeRefreshToken) match {
-    case (Some(userId), None, None) => createPasswordToken(userId, scope)
-    case (None, Some(clientId), None) if confidentialClient =>
-      createClientToken(clientId, scope)
-    case (Some(userId), Some(clientId), None) if confidentialClient =>
-      createCodeToken(userId, clientId, scope)
-    case (Some(userId), Some(clientId), None) if !confidentialClient =>
-      createImplicitToken(userId, clientId, scope)
-    case (_, _, Some(refreshToken)) => createRefreshToken(refreshToken, scope)
-    case _ =>
-      createDefaultToken(
-        maybeUserId,
-        maybeClientId,
-        confidentialClient,
-        maybeRefreshToken,
-        scope
-      )
+    ) = {
+    val updatedScopes = mapScope(scope)
+    (maybeUserId, maybeClientId, maybeRefreshToken) match {
+      case (Some(userId), None, None) => createPasswordToken(userId, updatedScopes)
+      case (None, Some(clientId), None) if confidentialClient =>
+        createClientToken(clientId, updatedScopes)
+      case (Some(userId), Some(clientId), None) if confidentialClient =>
+        createCodeToken(userId, clientId, updatedScopes)
+      case (Some(userId), Some(clientId), None) if !confidentialClient =>
+        createImplicitToken(userId, clientId, updatedScopes)
+      case (_, _, Some(refreshToken)) => createRefreshToken(refreshToken, updatedScopes)
+      case _ =>
+        createDefaultToken(
+          maybeUserId,
+          maybeClientId,
+          confidentialClient,
+          maybeRefreshToken,
+          updatedScopes
+        )
+    }
   }
 
   def createPasswordToken(userId: String, scope: Set[String]): F[AccessTokenResponse]
