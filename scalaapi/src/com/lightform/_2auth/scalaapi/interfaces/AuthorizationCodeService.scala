@@ -1,25 +1,23 @@
 package com.lightform._2auth.scalaapi.interfaces
 
-import com.lightform._2auth.javaapi.interfaces.AuthorizationCodeMeta
-import com.lightform._2auth.javaapi.interfaces.AuthorizationResponse
+import com.lightform._2auth.javaapi.interfaces.AuthorizationGrant.CodeGrant
+import com.lightform._2auth.javaapi.interfaces.{AuthorizationCodeMeta, AuthorizationGrant}
 
 trait AuthorizationCodeService[F[_]] {
 
   /**
     * @param userId
     * @param clientId
-    * @param redirectUri
+    * @param redirectUri the redirect_uri, if one was provided by the client
     * @param scope
-    * @param state must be copied to the response
     * @return an authorization code that can be validated later
     */
   def generateCode(
       userId: String,
       clientId: String,
       redirectUri: Option[String],
-      scope: Set[String],
-      state: Option[String]
-  ): F[AuthorizationResponse]
+      scope: Set[String]
+    ): F[String]
 
   /**
     *

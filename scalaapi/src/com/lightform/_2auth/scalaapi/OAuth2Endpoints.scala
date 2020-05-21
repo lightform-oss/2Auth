@@ -3,14 +3,15 @@ package com.lightform._2auth.scalaapi
 import cats.MonadError
 import cats.data.EitherT
 import cats.implicits._
+import com.lightform._2auth.javaapi.interfaces.AuthorizationGrant.{CodeGrant, TokenGrant}
 import com.lightform._2auth.javaapi.interfaces.{
   AccessTokenCodeRequest,
   AccessTokenPasswordRequest,
   AccessTokenRefreshRequest,
   AccessTokenRequest,
   AuthorizationRequest,
-  LimitedAccessTokenResponse,
   AccessTokenResponse => AccessTokenResponseI,
+  AuthorizationErrorResponse => AuthorizationErrorResponseI,
   AuthorizationResponse => AuthorizationResponseI,
   ErrorResponse => ErrorResponseI
 }
@@ -22,7 +23,11 @@ import com.lightform._2auth.scalaapi.interfaces.{
   UserService,
   OAuth2Endpoints => AbstractOAuth2Service
 }
-import com.lightform._2auth.scalaapi.payloads.responses.ErrorResponse
+import com.lightform._2auth.scalaapi.payloads.responses.{
+  AuthorizationCodeResponse,
+  AuthorizationErrorResponse,
+  ErrorResponse
+}
 
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters._
@@ -32,74 +37,94 @@ class OAuth2Endpoints[F[+_]](
     tokenService: TokenService[F],
     clientService: ClientService[F],
     codeService: AuthorizationCodeService[F]
-)(implicit F: MonadError[F, Throwable])
-    extends AbstractOAuth2Service[F] {
+  )(
+    implicit F: MonadError[F, Throwable]
+  ) extends AbstractOAuth2Service[F] {
 
   def handleAuthorizationRequest(
       userId: String,
       request: AuthorizationRequest
-  ): F[
-    Either[ErrorResponseI, Either[
-      LimitedAccessTokenResponse,
-      AuthorizationResponseI
-    ]]
-  ] =
+    ): F[Either[AuthorizationErrorResponseI, AuthorizationResponseI]] =
     (request.getResponseType match {
-      case "token" => handleImplicitRequest(userId, request).map(_.map(Left(_)))
+      case "token" => handleImplicitRequest(userId, request)
       case "code" =>
-        handleCodeAuthzRequest(userId, request).map(_.map(Right(_)))
-    }).recover { case e: ErrorResponse => Left(e) }
+        handleCodeAuthzRequest(userId, request)
+    }).recover {
+      case e: ErrorResponse =>
+        Left(AuthorizationErrorResponse(e, request.getState.toScala, None, false, false))
+    }
 
   def handleImplicitRequest(
       userId: String,
       request: AuthorizationRequest
-  ): F[Either[ErrorResponse, LimitedAccessTokenResponse]] =
-    Left(ErrorResponse(UNSUPPORTED_RESPONSE_TYPE, None)).pure[F]
+    ): F[Either[AuthorizationErrorResponseI, AuthorizationResponseI]] =
+    Left(
+      AuthorizationErrorResponse(
+        ErrorResponse(UNSUPPORTED_RESPONSE_TYPE, None),
+        request.getState.toScala,
+        request.getRedirectUri.toScala,
+        false,
+        true
+      )
+    ).pure[F]
 
   def handleCodeAuthzRequest(
       userId: String,
       request: AuthorizationRequest
-  ): F[Either[ErrorResponseI, AuthorizationResponseI]] =
+    ): F[Either[AuthorizationErrorResponse, AuthorizationCodeResponse]] =
     (for {
-      maybeRequiredRedirectUri <- EitherT.right[ErrorResponse](
+      maybeRequiredRedirectUri <- EitherT.right[AuthorizationErrorResponse](
         clientService.retrieveClientRedirectUri(request.getClientId)
       )
-      _ <- EitherT.fromEither[F](
+      redirectUri <- EitherT.fromEither[F](
         (maybeRequiredRedirectUri, request.getRedirectUri.toScala) match {
-          case (Some(registeredUri), Some(providedUri))
-              if registeredUri == providedUri =>
-            Right(())
+          case (Some(registeredUri), Some(providedUri)) if registeredUri == providedUri =>
+            Right(registeredUri)
           case (Some(_), Some(_)) =>
             Left(
-              ErrorResponse(
-                INVALID_REQUEST,
-                Some(
-                  "Provided redirect_uri does not match registered redirect_uri."
-                )
+              AuthorizationErrorResponse(
+                ErrorResponse(
+                  INVALID_REQUEST,
+                  Some(
+                    "Provided redirect_uri does not match registered redirect_uri."
+                  )
+                ),
+                None,
+                None,
+                false,
+                false
               )
             )
-          case (Some(_), None) => Right(())
-          case (None, Some(_)) => Right(())
+          case (Some(redirectUri), None) => Right(redirectUri)
+          case (None, Some(redirectUri)) => Right(redirectUri)
           case (None, None) =>
-            Left(ErrorResponse(INVALID_REQUEST, Some("Missing redirect_uri.")))
+            Left(
+              AuthorizationErrorResponse(
+                ErrorResponse(INVALID_REQUEST, Some("Missing redirect_uri.")),
+                None,
+                None,
+                false,
+                false
+              )
+            )
         }
       )
-      code <- EitherT.right[ErrorResponse](
+      state = request.getState.toScala
+      code <- EitherT.right[AuthorizationErrorResponse](
         codeService.generateCode(
           userId,
           request.getClientId,
           request.getRedirectUri.toScala,
-          request.getScope.asScala.toSet,
-          request.getState.toScala
+          request.getScope.asScala.toSet
         )
       )
-    } yield code).value
+    } yield AuthorizationCodeResponse(redirectUri, code, state)).value
 
   def handleTokenRequest(
       request: AccessTokenRequest,
       clientId: Option[String],
       clientSecret: Option[String]
-  ): F[Either[ErrorResponseI, AccessTokenResponseI]] =
+    ): F[Either[ErrorResponseI, AccessTokenResponseI]] =
     (request match {
       case password: AccessTokenPasswordRequest =>
         handlePasswordRequest(password)
@@ -123,7 +148,7 @@ class OAuth2Endpoints[F[+_]](
 
   def handlePasswordRequest(
       request: AccessTokenPasswordRequest
-  ): F[Either[ErrorResponse, AccessTokenResponseI]] =
+    ): F[Either[ErrorResponse, AccessTokenResponseI]] =
     (for {
       userId <- EitherT.fromOptionF(
         userService.authenticateUser(request.getUsername, request.getPassword),
@@ -149,7 +174,7 @@ class OAuth2Endpoints[F[+_]](
       request: AccessTokenRefreshRequest,
       clientId: Option[String],
       clientSecret: Option[String]
-  ): F[Either[ErrorResponse, AccessTokenResponseI]] =
+    ): F[Either[ErrorResponse, AccessTokenResponseI]] =
     (for {
       meta <- EitherT.fromOptionF(
         tokenService.validateRefreshToken(request.getRefreshToken),
@@ -159,8 +184,8 @@ class OAuth2Endpoints[F[+_]](
         )
       )
       _ <- (
-          meta.getClientId.toScala,
-          for { id <- clientId; sec <- clientSecret } yield id -> sec
+        meta.getClientId.toScala,
+        for { id <- clientId; sec <- clientSecret } yield id -> sec
       ) match {
         // token wasn't issued to a confidential client
         case _ if !meta.isConfidentialClient =>
@@ -185,9 +210,7 @@ class OAuth2Endpoints[F[+_]](
                  .validateClient(clientId, providedSecret)
              else false.pure[F])
               .map(
-                if (
-                  _
-                ) // token was issued to the client who's currently authenticating
+                if (_) // token was issued to the client who's currently authenticating
                   Right(())
                 else // token was issued to a confidential client, and the caller isn't them
                   Left(
@@ -216,7 +239,7 @@ class OAuth2Endpoints[F[+_]](
       request: AccessTokenCodeRequest,
       clientId: String,
       clientSecret: String
-  ): F[Either[ErrorResponse, AccessTokenResponseI]] =
+    ): F[Either[ErrorResponse, AccessTokenResponseI]] =
     (for {
       // get information about the authorization code
       meta <- EitherT.fromOptionF(
@@ -257,8 +280,7 @@ class OAuth2Endpoints[F[+_]](
       _ <- EitherT.fromEither[F](
         (meta.getRedirectUri.toScala, request.getRedirectUri.toScala) match {
           // correct redirect uri was provided
-          case (Some(requiredUri), Some(providedUri))
-              if requiredUri == providedUri =>
+          case (Some(requiredUri), Some(providedUri)) if requiredUri == providedUri =>
             Right(())
           // redirect uri was expected, but was not provided or did not match required value
           case (Some(_), _) =>
