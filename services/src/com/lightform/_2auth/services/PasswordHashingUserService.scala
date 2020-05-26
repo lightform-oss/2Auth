@@ -84,7 +84,6 @@ class RateLimiter[K](
 ) {
 
   private val timer = new JTimer(true)
-
   private val cache = CacheBuilder.newBuilder
     .expireAfterAccess(window.toSeconds, SECONDS)
     .build(new CacheLoader[K, AtomicInteger] {
