@@ -25,7 +25,7 @@ public class OAuth2Endpoints implements com.lightform._2auth.scalaapi.interfaces
 				codeService, CompletionStageMonadError.instance());
 	}
 
-	public CompletionStage<Either<ErrorResponse, Either<LimitedAccessTokenResponse, AuthorizationResponse>>> handleAuthorizationRequest(
+	public CompletionStage<Either<AuthorizationErrorResponse, AuthorizationResponse>> handleAuthorizationRequest(
 			String userId, AuthorizationRequest request) {
 		return underlying.handleAuthorizationRequest(userId, request);
 	}

@@ -12,7 +12,6 @@ import scala.util.Success
 import com.lightform._2auth.scalaapi.payloads.responses.AccessTokenResponse
 import java.{util => ju}
 
-import com.lightform._2auth.scalaapi.payloads.responses.AuthorizationResponse
 import com.lightform._2auth.scalaapi.models.AuthorizationCodeMeta
 import com.lightform._2auth.scalaapi.payloads.responses.ErrorResponse
 import com.lightform._2auth.services.PasswordHashingUserService
@@ -55,31 +54,6 @@ class InMemoryBackend(
           clientId == this.clientId && redirectIsRegistered
         )
       )
-
-  def generateCode(
-      userId: String,
-      clientId: String,
-      redirectUri: Option[String],
-      scope: Set[String],
-      state: Option[String]
-  ): Try[AuthorizationResponse] = {
-    this.code = ju.UUID.randomUUID.toString
-    this.requestedRedirectUri = redirectUri
-    requestedScope = scope
-    Success(AuthorizationResponse(code, state))
-  }
-
-  def validateCode(code: String): Try[Option[AuthorizationCodeMeta]] =
-    Success(
-      Option(
-        AuthorizationCodeMeta(
-          userId,
-          clientId,
-          requestedRedirectUri,
-          requestedScope
-        )
-      ).filter(_ => code == this.code)
-    )
 
   var refreshToken           = ""
   var meta: RefreshTokenMeta = null

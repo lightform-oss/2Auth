@@ -20,6 +20,7 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.{EitherValues, TryValues}
 
 import scala.util.{Success, Try}
+import com.lightform._2auth.javaapi.interfaces.AuthorizationGrant.CodeGrant
 
 class OAuth2EndpointsSpec
     extends AnyFlatSpec
@@ -135,14 +136,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
 
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         Some(testClientId),
@@ -180,14 +182,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
 
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         Some(testClientId),
@@ -225,14 +228,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
 
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         Some(testClientId),
@@ -270,14 +274,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
 
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         Some(testClientId),
@@ -313,13 +318,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
+
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         Some(testClientId),
@@ -340,13 +347,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
+
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         Some(testClientId),
@@ -369,13 +378,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
+
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         Some("steve"),
@@ -398,14 +409,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
 
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           None
         ),
         None,
@@ -420,17 +432,7 @@ class OAuth2EndpointsSpec
   }
 
   it should "reject unknown codes" in new fixtures {
-    val authResponse = service
-      .handleAuthorizationRequest(
-        testUserId,
-        AuthorizationRequest("code", testClientId, None, Set.empty, None)
-      )
-      .success
-      .value
-      .right
-      .value
-      .right
-      .value
+
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest("authorization_code", "abc123", None),
@@ -441,6 +443,7 @@ class OAuth2EndpointsSpec
       .value
       .left
       .value
+
     tokenResponse.getError.getValue shouldEqual "invalid_grant"
   }
 
@@ -461,7 +464,7 @@ class OAuth2EndpointsSpec
       .left
       .value
 
-    authResponse.getError.getValue shouldEqual "invalid_request"
+    authResponse.getError.getError.getValue shouldEqual "invalid_request"
   }
 
   it should "ensure provided redirect URIs match expected URIs in token requests" in new fixtures {
@@ -480,14 +483,15 @@ class OAuth2EndpointsSpec
       .value
       .right
       .value
-      .right
-      .value
+
+    authResponse.getGrant shouldBe a[CodeGrant]
+    val grant = authResponse.getGrant.asInstanceOf[CodeGrant]
 
     val tokenResponse = service
       .handleTokenRequest(
         AccessTokenCodeRequest(
           "authorization_code",
-          authResponse.getCode,
+          grant.getCode,
           Some("https://malice.example.com")
         ),
         Some(testClientId),
@@ -513,7 +517,7 @@ class OAuth2EndpointsSpec
       .left
       .value
 
-    authResponse.getError.getValue shouldEqual "invalid_request"
+    authResponse.getError.getError.getValue shouldEqual "invalid_request"
   }
 
   "the handleAuthorizationRequest method" should "recover oauth errors" in new fixtures {
@@ -524,7 +528,7 @@ class OAuth2EndpointsSpec
       )
       .success
       .value
-    response.left.value.getError.getValue shouldEqual "boom"
+    response.left.value.getError.getError.getValue shouldEqual "boom"
   }
 
   trait fixtures {
