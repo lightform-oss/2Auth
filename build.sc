@@ -34,7 +34,7 @@ object services extends ScalaModule {
 
   def ivyDeps = Agg(
     Jose.core, Jose.json, 
-    ivy"de.mkammerer:argon2-jvm:2.6",
+    ivy"de.mkammerer:argon2-jvm:2.7",
     ivy"com.google.guava:guava:29.0-jre"
   )
 
